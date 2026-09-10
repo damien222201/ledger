@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ledger — Spending &amp; Debt Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#f1efe4;
+    --paper-raised:#f6f4ea;
+    --rule:#c9d6c0;
+    --rule-strong:#a9bd9e;
+    --margin-line:#c98a8a;
+    --ink:#26323a;
+    --ink-soft:#5b6b63;
+    --debit:#9c3b3b;
+    --credit:#3f6b4a;
+    --binder:#8a7c5c;
+    --binder-dark:#6f6349;
+    --focus:#3f6b4a;
+  }
+
+  *{ box-sizing:border-box; }
+
+  body{
+    margin:0;
+    background:#e4e1d2;
+    color:var(--ink);
+    font-family:'IBM Plex Mono', monospace;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  .book{
+    max-width:760px;
+    margin:0 auto;
+    min-height:100vh;
+    background:var(--paper);
+    box-shadow:0 0 0 1px rgba(0,0,0,0.04), 0 30px 60px -30px rgba(0,0,0,0.35);
+    display:flex;
+    flex-direction:column;
+  }
+
+  /* ---------- Masthead ---------- */
+  header.masthead{
+    padding:36px 40px 22px;
+    border-bottom:3px double var(--rule-strong);
+  }
+  header.masthead h1{
+    font-family:'Fraunces', serif;
+    font-weight:600;
+    font-size:2.3rem;
+    margin:0;
+    letter-spacing:0.01em;
+  }
+  header.masthead p.sub{
+    margin:6px 0 0;
+    color:var(--ink-soft);
+    font-size:0.85rem;
+  }
+
+  .status-strip{
+    display:flex;
+    gap:28px;
+    margin-top:20px;
+    flex-wrap:wrap;
+  }
+  .status-item .label{
+    font-size:0.72rem;
+    color:var(--ink-soft);
+    margin-bottom:2px;
+  }
+  .status-item .value{
+    font-family:'IBM Plex Mono', monospace;
+    font-weight:600;
+    font-size:1.15rem;
+  }
+  .value.debit{ color:var(--debit); }
+  .value.credit{ color:var(--credit); }
+
+  /* ---------- Tabs ---------- */
+  nav.tabs{
+    display:flex;
+    padding:0 24px;
+    background:#e4e1d2;
+    gap:4px;
+  }
+  nav.tabs button{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.82rem;
+    padding:11px 18px 9px;
+    border:none;
+    background:#d9d5c2;
+    color:var(--ink-soft);
+    cursor:pointer;
+    border-radius:6px 6px 0 0;
+    position:relative;
+    top:1px;
+  }
+  nav.tabs button.active{
+    background:var(--paper);
+    color:var(--ink);
+    font-weight:600;
+  }
+  nav.tabs button:hover:not(.active){
+    background:#e8e5d6;
+  }
+
+  main{
+    flex:1;
+    padding:28px 40px 50px;
+  }
+
+  section.panel{ display:none; }
+  section.panel.active{ display:block; }
+
+  h2.panel-title{
+    font-family:'Fraunces', serif;
+    font-weight:600;
+    font-size:1.3rem;
+    margin:0 0 4px;
+  }
+  p.panel-hint{
+    color:var(--ink-soft);
+    font-size:0.8rem;
+    margin:0 0 20px;
+  }
+
+  /* ---------- Entry form ---------- */
+  form.entry-row{
+    display:grid;
+    grid-template-columns:130px 1fr 130px auto;
+    gap:10px;
+    align-items:end;
+    margin-bottom:22px;
+    padding-bottom:18px;
+    border-bottom:1px solid var(--rule);
+  }
+  form.entry-row.debt-form{
+    grid-template-columns:120px 1fr 110px 130px auto;
+  }
+  .field label{
+    display:block;
+    font-size:0.68rem;
+    color:var(--ink-soft);
+    margin-bottom:4px;
+  }
+  .field input, .field select{
+    width:100%;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.88rem;
+    padding:8px 9px;
+    border:1px solid var(--rule-strong);
+    border-radius:4px;
+    background:var(--paper-raised);
+    color:var(--ink);
+  }
+  .field input:focus, .field select:focus{
+    outline:2px solid var(--focus);
+    outline-offset:1px;
+  }
+  button.add-btn{
+    font-family:'IBM Plex Mono', monospace;
+    font-weight:600;
+    font-size:0.85rem;
+    padding:9px 16px;
+    border:none;
+    border-radius:4px;
+    background:var(--ink);
+    color:var(--paper);
+    cursor:pointer;
+    white-space:nowrap;
+  }
+  button.add-btn:hover{ background:#3a4750; }
+
+  /* ---------- Ledger ruled table ---------- */
+  .ledger-page{
+    background-image:repeating-linear-gradient(
+      to bottom,
+      transparent,
+      transparent 37px,
+      var(--rule) 38px
+    );
+  }
+  table.ledger{
+    width:100%;
+    border-collapse:collapse;
+    font-size:0.88rem;
+  }
+  table.ledger th{
+    text-align:left;
+    font-size:0.68rem;
+    color:var(--ink-soft);
+    font-weight:600;
+    padding:0 8px 6px;
+    border-bottom:1px solid var(--rule-strong);
+  }
+  table.ledger td{
+    padding:9px 8px;
+    height:38px;
+    vertical-align:middle;
+  }
+  table.ledger th:last-child, table.ledger td:last-child{ text-align:right; }
+  table.ledger td.amount{ text-align:right; color:var(--debit); font-weight:500; }
+  table.ledger td.reason{ color:var(--ink); }
+  table.ledger td.date-col{ color:var(--ink-soft); white-space:nowrap; }
+  table.ledger tr.settled td{ opacity:0.45; text-decoration:line-through; }
+
+  .empty-row td{
+    text-align:center;
+    color:var(--ink-soft);
+    font-style:italic;
+    padding:26px 0;
+  }
+
+  .row-actions button{
+    background:none;
+    border:none;
+    color:var(--ink-soft);
+    cursor:pointer;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.75rem;
+    text-decoration:underline;
+    padding:0;
+    margin-left:10px;
+  }
+  .row-actions button:hover{ color:var(--debit); }
+
+  .totals-line{
+    display:flex;
+    justify-content:flex-end;
+    gap:10px;
+    padding:14px 8px 0;
+    font-weight:600;
+    border-top:2px solid var(--ink);
+    margin-top:4px;
+  }
+  .totals-line .amt{ color:var(--debit); }
+
+  /* ---------- Daily date nav ---------- */
+  .date-nav{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    margin-bottom:16px;
+  }
+  .date-nav input[type="date"], .date-nav input[type="month"]{
+    font-family:'IBM Plex Mono', monospace;
+    padding:7px 9px;
+    border:1px solid var(--rule-strong);
+    border-radius:4px;
+    background:var(--paper-raised);
+    color:var(--ink);
+  }
+  .date-nav button{
+    background:none;
+    border:1px solid var(--rule-strong);
+    border-radius:4px;
+    width:30px; height:30px;
+    cursor:pointer;
+    color:var(--ink);
+    font-family:'IBM Plex Mono', monospace;
+  }
+  .date-nav button:hover{ background:var(--rule); }
+
+  /* ---------- Monthly breakdown ---------- */
+  .month-summary-cards{
+    display:flex;
+    gap:24px;
+    margin-bottom:22px;
+    flex-wrap:wrap;
+  }
+  .msum .label{ font-size:0.7rem; color:var(--ink-soft); }
+  .msum .value{ font-size:1.4rem; font-weight:600; font-family:'Fraunces', serif; }
+
+  .day-breakdown{ margin-top:26px; }
+  .day-bar-row{
+    display:grid;
+    grid-template-columns:90px 1fr 90px;
+    align-items:center;
+    gap:10px;
+    padding:5px 0;
+    font-size:0.8rem;
+  }
+  .day-bar-track{
+    background:var(--rule);
+    height:8px;
+    border-radius:4px;
+    overflow:hidden;
+  }
+  .day-bar-fill{
+    background:var(--debit);
+    height:100%;
+  }
+  .day-bar-row .amt{ text-align:right; color:var(--ink-soft); }
+
+  /* ---------- Debt summary ---------- */
+  .debt-summary{
+    display:flex;
+    gap:30px;
+    margin-bottom:22px;
+    flex-wrap:wrap;
+  }
+  .debt-summary .msum .value.owe{ color:var(--debit); }
+  .debt-summary .msum .value.owed{ color:var(--credit); }
+
+  .direction-toggle{
+    display:flex;
+    border:1px solid var(--rule-strong);
+    border-radius:4px;
+    overflow:hidden;
+  }
+  .direction-toggle button{
+    flex:1;
+    padding:8px 6px;
+    border:none;
+    background:var(--paper-raised);
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.78rem;
+    cursor:pointer;
+    color:var(--ink-soft);
+  }
+  .direction-toggle button.active[data-dir="owe"]{ background:var(--debit); color:#fff; }
+  .direction-toggle button.active[data-dir="owed"]{ background:var(--credit); color:#fff; }
+
+  footer.book-footer{
+    padding:16px 40px 26px;
+    border-top:1px solid var(--rule);
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    font-size:0.72rem;
+    color:var(--ink-soft);
+  }
+  footer.book-footer button{
+    background:none;
+    border:1px solid var(--rule-strong);
+    border-radius:4px;
+    padding:6px 12px;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.72rem;
+    cursor:pointer;
+    color:var(--ink-soft);
+  }
+  footer.book-footer button:hover{ border-color:var(--debit); color:var(--debit); }
+
+  @media (max-width:600px){
+    header.masthead{ padding:26px 20px 18px; }
+    main{ padding:20px 18px 40px; }
+    form.entry-row, form.entry-row.debt-form{
+      grid-template-columns:1fr;
+    }
+    .status-strip{ gap:18px; }
+    footer.book-footer{ padding:16px 20px 22px; flex-direction:column; gap:10px; align-items:flex-start; }
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    *{ transition:none !important; }
+  }
+</style>
+</head>
+<body>
+
+<div class="book">
+
+  <header class="masthead">
+    <h1>Ledger</h1>
+    <p class="sub">A running record of what leaves your pocket, and what's owed on either side.</p>
+    <div class="status-strip">
+      <div class="status-item">
+        <div class="label">Spent today</div>
+        <div class="value debit" id="todayTotal">₦0.00</div>
+      </div>
+      <div class="status-item">
+        <div class="label">Spent this month</div>
+        <div class="value debit" id="monthTotal">₦0.00</div>
+      </div>
+      <div class="status-item">
+        <div class="label">Net debt position</div>
+        <div class="value" id="netDebt">₦0.00</div>
+      </div>
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab-btn active" data-panel="daily">Daily Ledger</button>
+    <button class="tab-btn" data-panel="monthly">Monthly Summary</button>
+    <button class="tab-btn" data-panel="debt">Debt Book</button>
+  </nav>
+
+  <main>
+
+    <!-- ===================== DAILY ===================== -->
+    <section class="panel active" id="panel-daily">
+      <h2 class="panel-title">Daily Ledger</h2>
+      <p class="panel-hint">Log what you spent and why. Totals settle at the bottom of the page.</p>
+
+      <form class="entry-row" id="entryForm">
+        <div class="field">
+          <label for="entryDate">Date</label>
+          <input type="date" id="entryDate" required>
+        </div>
+        <div class="field">
+          <label for="entryReason">Reason</label>
+          <input type="text" id="entryReason" placeholder="e.g. Bike fare, Data bundle" required>
+        </div>
+        <div class="field">
+          <label for="entryAmount">Amount (₦)</label>
+          <input type="number" id="entryAmount" placeholder="0.00" min="0" step="0.01" required>
+        </div>
+        <button type="submit" class="add-btn">Add entry</button>
+      </form>
+
+      <div class="date-nav">
+        <button id="prevDay" aria-label="Previous day">‹</button>
+        <input type="date" id="viewDate">
+        <button id="nextDay" aria-label="Next day">›</button>
+        <button id="todayJump" style="width:auto; padding:0 10px;">Today</button>
+      </div>
+
+      <div class="ledger-page">
+        <table class="ledger">
+          <thead>
+            <tr><th>Reason</th><th></th><th>Amount</th></tr>
+          </thead>
+          <tbody id="dailyRows"></tbody>
+        </table>
+      </div>
+      <div class="totals-line">
+        <span>Day total</span>
+        <span class="amt" id="dailyPanelTotal">₦0.00</span>
+      </div>
+    </section>
+
+    <!-- ===================== MONTHLY ===================== -->
+    <section class="panel" id="panel-monthly">
+      <h2 class="panel-title">Monthly Summary</h2>
+      <p class="panel-hint">Every entry logged this month, totalled and broken down by day.</p>
+
+      <div class="date-nav">
+        <button id="prevMonth" aria-label="Previous month">‹</button>
+        <input type="month" id="viewMonth">
+        <button id="nextMonth" aria-label="Next month">›</button>
+      </div>
+
+      <div class="month-summary-cards">
+        <div class="msum">
+          <div class="label">Total spent</div>
+          <div class="value" id="msTotal">₦0.00</div>
+        </div>
+        <div class="msum">
+          <div class="label">Entries logged</div>
+          <div class="value" id="msCount">0</div>
+        </div>
+        <div class="msum">
+          <div class="label">Average per entry</div>
+          <div class="value" id="msAvg">₦0.00</div>
+        </div>
+      </div>
+
+      <div class="day-breakdown" id="dayBreakdown"></div>
+    </section>
+
+    <!-- ===================== DEBT ===================== -->
+    <section class="panel" id="panel-debt">
+      <h2 class="panel-title">Debt Book</h2>
+      <p class="panel-hint">Money you owe, and money owed to you. Mark an entry settled once it's cleared.</p>
+
+      <form class="entry-row debt-form" id="debtForm">
+        <div class="field">
+          <label for="debtParty">Who</label>
+          <input type="text" id="debtParty" placeholder="Name" required>
+        </div>
+        <div class="field">
+          <label for="debtReason">Reason</label>
+          <input type="text" id="debtReason" placeholder="e.g. Laptop repair loan" required>
+        </div>
+        <div class="field">
+          <label for="debtAmount">Amount (₦)</label>
+          <input type="number" id="debtAmount" placeholder="0.00" min="0" step="0.01" required>
+        </div>
+        <div class="field">
+          <label>Direction</label>
+          <div class="direction-toggle">
+            <button type="button" data-dir="owe" class="active">I owe</button>
+            <button type="button" data-dir="owed">Owed to me</button>
+          </div>
+        </div>
+        <button type="submit" class="add-btn">Add debt</button>
+      </form>
+
+      <div class="debt-summary">
+        <div class="msum">
+          <div class="label">You owe (outstanding)</div>
+          <div class="value owe" id="debtOweTotal">₦0.00</div>
+        </div>
+        <div class="msum">
+          <div class="label">Owed to you (outstanding)</div>
+          <div class="value owed" id="debtOwedTotal">₦0.00</div>
+        </div>
+      </div>
+
+      <table class="ledger">
+        <thead>
+          <tr><th>Who</th><th>Reason</th><th>Amount</th></tr>
+        </thead>
+        <tbody id="debtRows"></tbody>
+      </table>
+    </section>
+
+  </main>
+
+  <footer class="book-footer">
+    <span>Stored locally in this browser — nothing leaves your device.</span>
+    <div style="display:flex; gap:8px;">
+      <button id="exportBtn">Export CSV</button>
+      <button id="clearBtn">Clear all data</button>
+    </div>
+  </footer>
+
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  const ENTRIES_KEY = "ledger_entries_v1";
+  const DEBTS_KEY = "ledger_debts_v1";
+  const CURRENCY = "₦";
+
+  const todayISO = () => new Date().toISOString().slice(0,10);
+  const monthISO = (d) => d.slice(0,7);
+  const fmt = (n) => CURRENCY + Number(n || 0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
+
+  function load(key){
+    try { return JSON.parse(localStorage.getItem(key)) || []; }
+    catch(e){ return []; }
+  }
+  function save(key, data){ localStorage.setItem(key, JSON.stringify(data)); }
+
+  let entries = load(ENTRIES_KEY);
+  let debts = load(DEBTS_KEY);
+
+  let viewDate = todayISO();
+  let viewMonth = todayISO().slice(0,7);
+  let debtDirection = "owe";
+
+  // ---------------- Tabs ----------------
+  document.querySelectorAll(".tab-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+      document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
+      btn.classList.add("active");
+      document.getElementById("panel-" + btn.dataset.panel).classList.add("active");
+    });
+  });
+
+  // ---------------- Daily entry form ----------------
+  const entryForm = document.getElementById("entryForm");
+  const entryDateInput = document.getElementById("entryDate");
+  entryDateInput.value = todayISO();
+
+  entryForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const date = document.getElementById("entryDate").value || todayISO();
+    const reason = document.getElementById("entryReason").value.trim();
+    const amount = parseFloat(document.getElementById("entryAmount").value);
+    if (!reason || isNaN(amount) || amount <= 0) return;
+
+    entries.push({ id: Date.now(), date, reason, amount });
+    save(ENTRIES_KEY, entries);
+
+    document.getElementById("entryReason").value = "";
+    document.getElementById("entryAmount").value = "";
+    document.getElementById("entryReason").focus();
+
+    viewDate = date;
+    document.getElementById("viewDate").value = date;
+    renderAll();
+  });
+
+  // ---------------- Daily date navigation ----------------
+  const viewDateInput = document.getElementById("viewDate");
+  viewDateInput.value = viewDate;
+  viewDateInput.addEventListener("change", () => {
+    viewDate = viewDateInput.value;
+    renderDaily();
+  });
+  document.getElementById("prevDay").addEventListener("click", () => shiftDay(-1));
+  document.getElementById("nextDay").addEventListener("click", () => shiftDay(1));
+  document.getElementById("todayJump").addEventListener("click", () => {
+    viewDate = todayISO();
+    viewDateInput.value = viewDate;
+    renderDaily();
+  });
+  function shiftDay(delta){
+    const d = new Date(viewDate + "T00:00:00");
+    d.setDate(d.getDate() + delta);
+    viewDate = d.toISOString().slice(0,10);
+    viewDateInput.value = viewDate;
+    renderDaily();
+  }
+
+  function renderDaily(){
+    const dayEntries = entries.filter(e => e.date === viewDate).sort((a,b) => a.id - b.id);
+    const tbody = document.getElementById("dailyRows");
+    tbody.innerHTML = "";
+
+    if (dayEntries.length === 0){
+      tbody.innerHTML = '<tr class="empty-row"><td colspan="3">No entries logged for this day yet.</td></tr>';
+    } else {
+      dayEntries.forEach(en => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td class="reason">${escapeHtml(en.reason)}</td>
+          <td class="row-actions"><button data-id="${en.id}" class="del-entry">remove</button></td>
+          <td class="amount">${fmt(en.amount)}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    const dayTotal = dayEntries.reduce((s,e) => s + Number(e.amount), 0);
+    document.getElementById("dailyPanelTotal").textContent = fmt(dayTotal);
+
+    tbody.querySelectorAll(".del-entry").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const id = Number(btn.dataset.id);
+        entries = entries.filter(e => e.id !== id);
+        save(ENTRIES_KEY, entries);
+        renderAll();
+      });
+    });
+  }
+
+  // ---------------- Monthly summary ----------------
+  const viewMonthInput = document.getElementById("viewMonth");
+  viewMonthInput.value = viewMonth;
+  viewMonthInput.addEventListener("change", () => {
+    viewMonth = viewMonthInput.value;
+    renderMonthly();
+  });
+  document.getElementById("prevMonth").addEventListener("click", () => shiftMonth(-1));
+  document.getElementById("nextMonth").addEventListener("click", () => shiftMonth(1));
+  function shiftMonth(delta){
+    const [y,m] = viewMonth.split("-").map(Number);
+    const d = new Date(y, m - 1 + delta, 1);
+    viewMonth = d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0");
+    viewMonthInput.value = viewMonth;
+    renderMonthly();
+  }
+
+  function renderMonthly(){
+    const monthEntries = entries.filter(e => monthISO(e.date) === viewMonth);
+    const total = monthEntries.reduce((s,e) => s + Number(e.amount), 0);
+    document.getElementById("msTotal").textContent = fmt(total);
+    document.getElementById("msCount").textContent = monthEntries.length;
+    document.getElementById("msAvg").textContent = fmt(monthEntries.length ? total / monthEntries.length : 0);
+
+    const byDay = {};
+    monthEntries.forEach(e => { byDay[e.date] = (byDay[e.date] || 0) + Number(e.amount); });
+    const days = Object.keys(byDay).sort();
+    const maxDay = Math.max(1, ...Object.values(byDay));
+
+    const container = document.getElementById("dayBreakdown");
+    if (days.length === 0){
+      container.innerHTML = '<p class="panel-hint">No entries logged this month yet.</p>';
+      return;
+    }
+    container.innerHTML = days.map(d => {
+      const pct = Math.round((byDay[d] / maxDay) * 100);
+      const label = new Date(d + "T00:00:00").toLocaleDateString(undefined, {day:"2-digit", month:"short"});
+      return `
+        <div class="day-bar-row">
+          <span>${label}</span>
+          <div class="day-bar-track"><div class="day-bar-fill" style="width:${pct}%"></div></div>
+          <span class="amt">${fmt(byDay[d])}</span>
+        </div>`;
+    }).join("");
+  }
+
+  // ---------------- Debt book ----------------
+  document.querySelectorAll(".direction-toggle button").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".direction-toggle button").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      debtDirection = btn.dataset.dir;
+    });
+  });
+
+  const debtForm = document.getElementById("debtForm");
+  debtForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const party = document.getElementById("debtParty").value.trim();
+    const reason = document.getElementById("debtReason").value.trim();
+    const amount = parseFloat(document.getElementById("debtAmount").value);
+    if (!party || !reason || isNaN(amount) || amount <= 0) return;
+
+    debts.push({ id: Date.now(), party, reason, amount, direction: debtDirection, date: todayISO(), settled: false });
+    save(DEBTS_KEY, debts);
+
+    debtForm.reset();
+    document.getElementById("debtParty").focus();
+    renderAll();
+  });
+
+  function renderDebts(){
+    const tbody = document.getElementById("debtRows");
+    tbody.innerHTML = "";
+
+    if (debts.length === 0){
+      tbody.innerHTML = '<tr class="empty-row"><td colspan="3">No debts logged yet.</td></tr>';
+    } else {
+      debts.slice().sort((a,b) => a.settled - b.settled || b.id - a.id).forEach(d => {
+        const tr = document.createElement("tr");
+        if (d.settled) tr.classList.add("settled");
+        const sign = d.direction === "owe" ? "debit" : "credit";
+        const dirLabel = d.direction === "owe" ? "you owe" : "owed to you";
+        tr.innerHTML = `
+          <td class="reason">${escapeHtml(d.party)}</td>
+          <td class="reason">${escapeHtml(d.reason)} <span style="color:var(--ink-soft); font-size:0.75rem;">(${dirLabel})</span>
+            <span class="row-actions">
+              <button data-id="${d.id}" class="toggle-settle">${d.settled ? "unsettle" : "mark settled"}</button>
+              <button data-id="${d.id}" class="del-debt">remove</button>
+            </span>
+          </td>
+          <td class="amount" style="color: var(--${sign})">${fmt(d.amount)}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    const outstanding = debts.filter(d => !d.settled);
+    const oweTotal = outstanding.filter(d => d.direction === "owe").reduce((s,d) => s + Number(d.amount), 0);
+    const owedTotal = outstanding.filter(d => d.direction === "owed").reduce((s,d) => s + Number(d.amount), 0);
+    document.getElementById("debtOweTotal").textContent = fmt(oweTotal);
+    document.getElementById("debtOwedTotal").textContent = fmt(owedTotal);
+
+    const net = owedTotal - oweTotal;
+    const netEl = document.getElementById("netDebt");
+    netEl.textContent = (net >= 0 ? "+" : "-") + fmt(Math.abs(net)).replace(CURRENCY, CURRENCY);
+    netEl.classList.remove("debit", "credit");
+    netEl.classList.add(net >= 0 ? "credit" : "debit");
+
+    tbody.querySelectorAll(".del-debt").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const id = Number(btn.dataset.id);
+        debts = debts.filter(d => d.id !== id);
+        save(DEBTS_KEY, debts);
+        renderAll();
+      });
+    });
+    tbody.querySelectorAll(".toggle-settle").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const id = Number(btn.dataset.id);
+        debts = debts.map(d => d.id === id ? {...d, settled: !d.settled} : d);
+        save(DEBTS_KEY, debts);
+        renderAll();
+      });
+    });
+  }
+
+  // ---------------- Status strip ----------------
+  function renderStatusStrip(){
+    const today = todayISO();
+    const thisMonth = today.slice(0,7);
+    const todayTotal = entries.filter(e => e.date === today).reduce((s,e) => s + Number(e.amount), 0);
+    const monthTotal = entries.filter(e => monthISO(e.date) === thisMonth).reduce((s,e) => s + Number(e.amount), 0);
+    document.getElementById("todayTotal").textContent = fmt(todayTotal);
+    document.getElementById("monthTotal").textContent = fmt(monthTotal);
+  }
+
+  // ---------------- Export / Clear ----------------
+  document.getElementById("exportBtn").addEventListener("click", () => {
+    let csv = "Type,Date,Party/Reason,Reason,Amount,Direction,Settled\n";
+    entries.forEach(e => {
+      csv += `Expense,${e.date},,${csvSafe(e.reason)},${e.amount},,\n`;
+    });
+    debts.forEach(d => {
+      csv += `Debt,${d.date},${csvSafe(d.party)},${csvSafe(d.reason)},${d.amount},${d.direction},${d.settled}\n`;
+    });
+    const blob = new Blob([csv], {type: "text/csv"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `ledger-export-${todayISO()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  document.getElementById("clearBtn").addEventListener("click", () => {
+    if (!confirm("This will permanently delete every expense and debt entry stored in this browser. Continue?")) return;
+    entries = [];
+    debts = [];
+    save(ENTRIES_KEY, entries);
+    save(DEBTS_KEY, debts);
+    renderAll();
+  });
+
+  function csvSafe(s){ return '"' + String(s).replace(/"/g, '""') + '"'; }
+  function escapeHtml(s){
+    const div = document.createElement("div");
+    div.textContent = s;
+    return div.innerHTML;
+  }
+
+  function renderAll(){
+    renderDaily();
+    renderMonthly();
+    renderDebts();
+    renderStatusStrip();
+  }
+
+  renderAll();
+})();
+</script>
+
+</body>
+</html>
