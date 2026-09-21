@@ -1,4 +1,5 @@
 # Ledger — Spending & Debt Tracker
+<img width="1920" height="1080" alt="Screenshot from 2026-09-21 19-09-21" src="https://github.com/user-attachments/assets/9b435128-f30f-4bcf-a218-f54eea6313a3" />
 
 A single self-contained HTML page for logging daily spending and
 tracking debt — no backend, no build step, no database. Everything is
